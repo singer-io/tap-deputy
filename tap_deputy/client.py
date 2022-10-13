@@ -54,7 +54,9 @@ class DeputyClient():
         Checks token expiry and refreshes token when it is expired and dev mode is not enabled
         """
         if self.__dev_mode:
-            LOGGER.info('Skipping token validation')
+            if not self.access_token:
+                raise Exception('Access token is missing')
+
             return
 
         if self.__access_token and self.__expires_at > now():
