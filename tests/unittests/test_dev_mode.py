@@ -74,15 +74,3 @@ class TestDevMode(unittest.TestCase):
         self.assertIsNone(deputy.refresh())
         self.assertEqual(deputy.refresh_token, "old_refresh_token")
         self.assertEqual(deputy.access_token, "old_access_token")
-
-    def test_dev_mode_enabled_expired_token(self):
-        """Verify that exception is raised when dev mode is enabled and token is expired"""
-        test_config["expires_at"] = strftime(now() - timedelta(days=1))
-        write_new_config_file()
-        deputy = DeputyClient(config=test_config,
-                              config_path=test_config_path, dev_mode=True)
-
-        with self.assertRaises(Exception) as err:
-            deputy.refresh()
-            self.assertEqual(
-                str(err), "Access Token in config is expired, unable to authenticate in dev mode")

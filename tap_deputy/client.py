@@ -1,8 +1,10 @@
 from datetime import timedelta
 import json
+
 from singer import metrics, get_logger
 from singer.utils import strptime_to_utc, now, strftime
 from requests.exceptions import ConnectionError
+from tap_deputy import utils
 import backoff
 import requests
 
@@ -17,7 +19,6 @@ class Server5xxError(Exception):
 class DeputyClient():
     def __init__(self, config, config_path, dev_mode):
         self.__config_path = config_path
-        self.__config = config
         self.__user_agent = config.get('user_agent')
         self.__domain = config.get('domain')
         self.__client_id = config.get('client_id')
@@ -29,10 +30,6 @@ class DeputyClient():
         self.__dev_mode = dev_mode
         self.__expires_at = strptime_to_utc(config.get('expires_at')) \
             if config.get("expires_at") else None
-
-    @property
-    def config(self):
-        return self.__config
 
     @property
     def refresh_token(self):
@@ -54,20 +51,10 @@ class DeputyClient():
 
     def refresh(self):
         """
-        Checks token expiry and refresh token when it is expired and dev mode is not enabled
+        Checks token expiry and refreshes token when it is expired and dev mode is not enabled
         """
         if self.__dev_mode:
-            if not self.__access_token:
-                raise Exception("Access token config property is missing")
-
-            if not self.__expires_at:
-                raise Exception(
-                    "Expiry of access token config property is missing")
-
-            if self.__expires_at < now():
-                raise Exception(
-                    "Access Token in config is expired, unable to authenticate in dev mode")
-
+            LOGGER.info('Skipping token validation')
             return
 
         if self.__access_token and self.__expires_at > now():
@@ -90,13 +77,10 @@ class DeputyClient():
         # pad by 10 seconds for clock drift
         self.__expires_at = now() + timedelta(seconds=data['expires_in'] - 10)
 
-        if not self.__dev_mode:
-            self.__config['refresh_token'] = self.__refresh_token
-            self.__config['access_token'] = self.__access_token
-            self.__config['expires_at'] = strftime(self.__expires_at)
-
-            with open(self.__config_path, 'w') as tap_config:
-                json.dump(self.__config, tap_config, indent=2)
+        utils.write_config(self.__config_path,
+                           {"refresh_token": self.__refresh_token,
+                            "access_token": self.__access_token,
+                            "expires_at": strftime(self.__expires_at)})
 
     @backoff.on_exception(backoff.expo,
                           (Server5xxError, ConnectionError),
