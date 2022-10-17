@@ -93,7 +93,6 @@ class DeputyClient():
                           max_tries=5,
                           factor=2)
     def request(self, method, path=None, url=None, auth_call=False, **kwargs):
-        print("*********")
         if auth_call is False and \
             (self.__access_token is None or
              self.__expires_at <= now()):
