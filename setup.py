@@ -14,6 +14,13 @@ setup(name='tap-deputy',
           'requests==2.21.0',
           'singer-python==5.12.2'
       ],
+      extras_require= {
+          'dev': [
+              'pylint',
+              'nose',
+              'ipdb',
+          ]
+      },
       entry_points='''
           [console_scripts]
           tap-deputy=tap_deputy:main
