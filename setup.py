@@ -8,6 +8,7 @@ setup(name='tap-deputy',
       author='Deputy',
       url='https://www.deputy.com',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
+      python_requires='>=3.5.3',
       py_modules=['tap_deputy'],
       install_requires=[
           'backoff==1.8.0',
