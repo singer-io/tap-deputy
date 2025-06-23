@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.3
+  * Bump requests from 2.32.4, backoff from 1.8.0 to 1.10.0 [#11](https://github.com/singer-io/tap-deputy/pull/11)
+
 ## 1.1.2
   * Bump requests from 2.21.0 to 2.32.3 [#10](https://github.com/singer-io/tap-deputy/pull/10)
 
