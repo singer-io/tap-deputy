@@ -13,7 +13,7 @@ setup(name='tap-deputy',
       install_requires=[
           'backoff==1.10.0',
           'requests==2.32.4',
-          'singer-python==5.13.0'
+          'singer-python==5.13.2'
       ],
       extras_require= {
           'dev': [
