@@ -106,7 +106,7 @@ class TestDevMode(unittest.TestCase):
 
         self.assertEqual(deputy.refresh_token, "old_refresh_token")
         self.assertEqual(deputy.access_token, "old_access_token")
-        self.assertEquals(mocked_refresh.call_count, 0)
+        self.assertEqual(mocked_refresh.call_count, 0)
 
     @mock.patch('tap_deputy.client.DeputyClient.post')
     def test_dev_mode_enabled_valid_token(self, mocked_post_request):
@@ -135,4 +135,4 @@ class TestDevMode(unittest.TestCase):
                            auth_call=True)
 
         # Verify the call count for each error
-        self.assertEquals(mocked_post_request.call_count, retry_count)
+        self.assertEqual(mocked_post_request.call_count, retry_count)
