@@ -1,10 +1,14 @@
 from singer.catalog import Catalog, CatalogEntry, Schema
 
 """
-To specify the replication method, use the key replication-method, and for the replication key, 
-use replication-key
-in the RESOURCES. 
-Example :  {'stream_name': 'addresses', 'replication-method', 'INCREMENTAL', 'replication-keys', 'Modified'}
+To specify the replication method, use the key replication-method, 
+and for the replication key, use replication-key in the RESOURCES. 
+Example :  
+    {
+        'stream_name': 'addresses', 
+        'replication-method', 'INCREMENTAL', 
+        'replication-keys', 'Modified'
+    }
 """
 RESOURCES = {
     'Address': {'stream_name': 'addresses'},
