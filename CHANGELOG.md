@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.0
+  * Added Replication method to the metadata [#15](https://github.com/singer-io/tap-deputy/pull/15)
+
 ## 1.1.3
   * Bump requests from 2.32.4, backoff from 1.8.0 to 1.10.0 [#11](https://github.com/singer-io/tap-deputy/pull/11)
 
