@@ -1,8 +1,13 @@
-version: 2
-jobs:
-  build:
+version: 2.1
+
+executors:
+  docker-executor:
     docker:
       - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:stitch-tap-tester-uv
+
+jobs:
+  build:
+    executor: docker-executor
     steps:
       - checkout
       - run:
@@ -30,6 +35,14 @@ jobs:
       - store_artifacts:
           path: htmlcov
       - add_ssh_keys
+      - run:
+          name: 'Integration Tests'
+          command: |
+            source /usr/local/share/virtualenvs/tap-tester/bin/activate
+            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/tap_tester_sandbox dev_env.sh
+            source dev_env.sh
+            unset USE_STITCH_BACKEND
+            run-test --tap=tap-deputy tests
 workflows:
   version: 2
   commit:
