@@ -29,6 +29,10 @@ import os
 
 from tap_tester.base_suite_tests.base_case import BaseCase
 
+
+# Path for the auto-generated --dev wrapper (written at test-class setup time).
+_DEV_WRAPPER_PATH = '/tmp/tap-deputy-dev'
+
 # ---------------------------------------------------------------------------
 # All Deputy API resource → stream-name mappings (mirrors tap_deputy/discover.py)
 # ---------------------------------------------------------------------------
@@ -101,6 +105,7 @@ _REQUIRED_ENV_VARS = [
     'TAP_DEPUTY_CLIENT_SECRET',
     'TAP_DEPUTY_REDIRECT_URI',
     'TAP_DEPUTY_REFRESH_TOKEN',
+    'TAP_DEPUTY_ACCESS_TOKEN',  # required for --dev mode (no OAuth call is made)
 ]
 
 
@@ -112,6 +117,10 @@ class DeputyBase(BaseCase):
 
     # Default start date; individual tests may override via self.start_date.
     start_date = '2020-01-01T00:00:00Z'
+
+    # Tracks the live refresh token across test methods.  Deputy rotates the
+    # refresh token on every OAuth exchange; kept here for future non-dev runs.
+    _current_refresh_token = os.getenv('TAP_DEPUTY_REFRESH_TOKEN')
 
     @staticmethod
     def tap_name():
@@ -127,13 +136,16 @@ class DeputyBase(BaseCase):
             'domain': os.getenv('TAP_DEPUTY_DOMAIN'),
         }
 
-    @staticmethod
-    def get_credentials():
+    @classmethod
+    def get_credentials(cls):
         return {
             'client_id': os.getenv('TAP_DEPUTY_CLIENT_ID'),
             'client_secret': os.getenv('TAP_DEPUTY_CLIENT_SECRET'),
             'redirect_uri': os.getenv('TAP_DEPUTY_REDIRECT_URI'),
-            'refresh_token': os.getenv('TAP_DEPUTY_REFRESH_TOKEN'),
+            'refresh_token': cls._current_refresh_token or os.getenv('TAP_DEPUTY_REFRESH_TOKEN'),
+            # access_token is required in --dev mode so the tap skips the
+            # OAuth endpoint entirely and uses this token directly.
+            'access_token': os.getenv('TAP_DEPUTY_ACCESS_TOKEN'),
         }
 
     @staticmethod
@@ -155,23 +167,6 @@ class DeputyBase(BaseCase):
         }
 
     # ------------------------------------------------------------------
-    # Bookmark helpers
-    # ------------------------------------------------------------------
-
-    def get_bookmark_value(self, state, stream):
-        """
-        Deputy writes bookmarks as plain datetime strings rather than the
-        Singer-standard nested-dict format:
-
-            standard: {"bookmarks": {"employees": {"Modified": "2024-01-01T…"}}}
-            deputy:   {"bookmarks": {"employees": "2024-01-01T…"}}
-
-        Override the base implementation to handle this flat format.
-        """
-        stream_id = self.get_stream_id(stream)
-        return state.get('bookmarks', {}).get(stream_id)
-
-    # ------------------------------------------------------------------
     # Environment guard
     # ------------------------------------------------------------------
 
@@ -181,3 +176,27 @@ class DeputyBase(BaseCase):
         missing_envs = [v for v in _REQUIRED_ENV_VARS if os.getenv(v) is None]
         if missing_envs:
             raise ValueError(f"Missing environment variables: {missing_envs}")
+
+        # Write a tiny Python wrapper to /tmp that forwards all args to
+        # tap-deputy with --dev appended.  No committed script is needed.
+        import shutil, stat, sys, textwrap
+        # Resolve the real tap-deputy executable path before we overwrite
+        # STITCH_TAP_PATH, so the wrapper always uses an absolute path.
+        tap_deputy_path = (
+            os.getenv('STITCH_TAP_PATH')
+            or shutil.which('tap-deputy')
+        )
+        if not tap_deputy_path:
+            raise RuntimeError("Cannot locate tap-deputy executable. "
+                               "Set STITCH_TAP_PATH or ensure tap-deputy is on PATH.")
+        with open(_DEV_WRAPPER_PATH, 'w') as fh:
+            fh.write(textwrap.dedent(f"""\
+                #!{sys.executable}
+                import os, sys
+                os.execv({tap_deputy_path!r}, [{tap_deputy_path!r}] + sys.argv[1:] + ['--dev'])
+            """))
+        os.chmod(_DEV_WRAPPER_PATH,
+                 os.stat(_DEV_WRAPPER_PATH).st_mode
+                 | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.environ['STITCH_TAP_PATH'] = _DEV_WRAPPER_PATH
+

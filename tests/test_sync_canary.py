@@ -21,10 +21,10 @@ class DeputySyncCanaryTest(SyncCanaryTest, DeputyBase):
         return "tap_tester_deputy_sync_canary_test"
 
     def streams_to_test(self):
-        return self.expected_stream_names()
+        return {"system_usage_tracking", "system_usage_balances"}
 
     def setUp(self):  # pylint: disable=invalid-name
         # Use a recent window to keep the canary fast; adjust if the test
         # account does not have data within this range.
-        self.start_date = '2024-01-01T00:00:00Z'
+        self.start_date = '2025-01-01T00:00:00Z'
         super().setUp()

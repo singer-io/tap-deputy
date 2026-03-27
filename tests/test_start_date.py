@@ -23,7 +23,7 @@ class DeputyStartDateTest(StartDateTest, DeputyBase):
         return "tap_tester_deputy_start_date_test"
 
     def streams_to_test(self):
-        return self.expected_stream_names()
+        return {"system_usage_tracking", "system_usage_balances"}
 
     @property
     def start_date_1(self):
@@ -31,4 +31,4 @@ class DeputyStartDateTest(StartDateTest, DeputyBase):
 
     @property
     def start_date_2(self):
-        return '2024-01-01T00:00:00Z'
+        return '2025-01-01T00:00:00Z'

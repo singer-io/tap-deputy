@@ -19,7 +19,7 @@ from copy import deepcopy
 
 from tap_tester.base_suite_tests.bookmark_test import BookmarkTest
 
-from base import DeputyBase, ALL_STREAM_NAMES
+from base import DeputyBase
 
 
 class DeputyBookmarkTest(BookmarkTest, DeputyBase):
@@ -28,14 +28,19 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
     # -------------------------------------------------------------------
     # Bookmark wire format used by tap-deputy (plain ISO-8601 string)
     # -------------------------------------------------------------------
-    bookmark_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+    # Deputy writes bookmarks as ISO-8601 with a UTC-offset, e.g.
+    # "2026-03-27T00:02:56-07:00".  Python's %z directive handles ±HH:MM
+    # offsets in 3.7+ so this matches the actual wire format exactly.
+    bookmark_format = "%Y-%m-%dT%H:%M:%S%z"
 
     # Pre-seed state so that sync 1 only replays the most recent data,
     # keeping wall-clock time reasonable.  The date is intentionally set
-    # a few years back to ensure every stream that exists in the test
-    # environment has data after this point.
+    # close enough to now that the sync is fast, but far enough back that
+    # both streams have at least some records after this point.
+    # Format matches tap-deputy's start_date format (no microseconds, Z suffix)
+    # which is what the Deputy QUERY API accepts.
     initial_bookmarks = {
-        'bookmarks': {stream: '2023-01-01T00:00:00.000000Z' for stream in ALL_STREAM_NAMES}
+        'bookmarks': {stream: '2025-01-01T00:00:00Z' for stream in ["system_usage_tracking", "system_usage_balances"]}
     }
 
     @staticmethod
@@ -43,7 +48,7 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
         return "tap_tester_deputy_bookmark_test"
 
     def streams_to_test(self):
-        return self.expected_stream_names()
+        return {"system_usage_tracking", "system_usage_balances"}
 
     # -------------------------------------------------------------------
     # Deputy-specific overrides

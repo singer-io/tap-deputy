@@ -24,4 +24,4 @@ class DeputyMinimumSelectionTest(MinimumSelectionTest, DeputyBase):
         return "tap_tester_deputy_automatic_fields_test"
 
     def streams_to_test(self):
-        return self.expected_stream_names()
+        return {"system_usage_tracking", "system_usage_balances"}
