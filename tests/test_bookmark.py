@@ -15,11 +15,12 @@ rather than the Singer-standard nested format::
 ``get_bookmark_value`` and ``manipulate_state`` are both overridden to handle
 this flat structure so the base BookmarkTest assertions work correctly.
 """
+import os
 from copy import deepcopy
 
 from tap_tester.base_suite_tests.bookmark_test import BookmarkTest
 
-from base import DeputyBase
+from base import DeputyBase, _DEV_WRAPPER_PATH
 
 
 class DeputyBookmarkTest(BookmarkTest, DeputyBase):
@@ -72,3 +73,41 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
                 replication_value = rep
             new_state['bookmarks'][stream] = replication_value
         return new_state
+
+    def get_bookmark_value(self, state: dict, stream: str):
+        """
+        Deputy stores bookmark state as a plain ISO-8601 string at the stream
+        level rather than the Singer-standard nested format::
+
+            # Deputy (flat)
+            {"bookmarks": {"employees": "2024-01-15T08:30:00-07:00"}}
+
+            # Standard Singer (nested)
+            {"bookmarks": {"employees": {"Modified": "2024-01-15T08:30:00-07:00"}}}
+
+        The base-class implementation calls ``.get(replication_key)`` on the
+        stream bookmark, which would raise ``AttributeError`` on a plain string.
+        This override reads the scalar value directly.
+        """
+        replication_method = self.expected_replication_method(stream)
+        if replication_method != self.INCREMENTAL:
+            return None
+        return state.get('bookmarks', {}).get(stream) or None
+
+    def run_and_verify_sync_mode(self, conn_id):
+        """
+        Re-assert ``STITCH_TAP_PATH`` before every sync invocation.
+
+        ``InMemoryBackend.run_sync_mode`` reads ``STITCH_TAP_PATH`` via
+        ``os.getenv`` at call time, so both the first and second sync should
+        pick it up correctly.  However, if the first sync subprocess runs
+        without ``--dev`` for any reason (e.g. a transient env-var loss or
+        a test-runner that resets the environment between calls), it triggers
+        a real OAuth exchange that rotates the Deputy refresh token—leaving
+        the second sync with an invalid token and no ``--dev`` protection.
+
+        Re-pinning the path before every call guarantees dev mode is active
+        for each sync, preventing the OAuth rotation side-effect.
+        """
+        os.environ['STITCH_TAP_PATH'] = _DEV_WRAPPER_PATH
+        return super().run_and_verify_sync_mode(conn_id)
