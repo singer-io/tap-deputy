@@ -110,9 +110,8 @@ class DeputyClient():
         if 'headers' not in kwargs:
             kwargs['headers'] = {}
 
-        if not auth_call:
-            kwargs['headers']['Authorization'] = 'OAuth {}'.format(
-                self.__access_token)
+        kwargs['headers']['Authorization'] = 'OAuth {}'.format(
+            self.__access_token)
 
         if self.__user_agent:
             kwargs['headers']['User-Agent'] = self.__user_agent
