@@ -6,24 +6,17 @@ classes stay DRY and comparable across the suite.
 
 Authentication notes
 --------------------
-tap-deputy uses an OAuth 2.0 refresh-token flow.  The following environment
-variables must be set before running any integration test:
+tap-deputy tests always run in --dev mode.  The tap uses ``access_token``
+directly and never calls the OAuth endpoint, so token rotation does not occur.
+
+The following environment variables must be set before running any test:
 
     TAP_DEPUTY_DOMAIN          – company subdomain, e.g. mycompany.ent-na.deputy.com
     TAP_DEPUTY_CLIENT_ID       – OAuth application client ID
     TAP_DEPUTY_CLIENT_SECRET   – OAuth application client secret
     TAP_DEPUTY_REDIRECT_URI    – registered redirect URI for the OAuth app
-    TAP_DEPUTY_REFRESH_TOKEN   – long-lived refresh token (updated after each sync
-                                 because tap-deputy rotates tokens)
-
-Bookmark format
----------------
-tap-deputy stores bookmarks as plain ISO-8601 strings rather than the standard
-Singer nested-dict format::
-
-    {"bookmarks": {"employees": "2024-01-15T08:30:00.000000Z"}}
-
-``get_bookmark_value`` is overridden here to read this flat format.
+    TAP_DEPUTY_REFRESH_TOKEN   – refresh token (not used in dev mode but required by tap config)
+    TAP_DEPUTY_ACCESS_TOKEN    – live access token used directly in --dev mode
 """
 import os
 
@@ -118,10 +111,6 @@ class DeputyBase(BaseCase):
     # Default start date; individual tests may override via self.start_date.
     start_date = '2020-01-01T00:00:00Z'
 
-    # Tracks the live refresh token across test methods.  Deputy rotates the
-    # refresh token on every OAuth exchange; kept here for future non-dev runs.
-    _current_refresh_token = os.getenv('TAP_DEPUTY_REFRESH_TOKEN')
-
     @staticmethod
     def tap_name():
         return "tap-deputy"
@@ -136,15 +125,13 @@ class DeputyBase(BaseCase):
             'domain': os.getenv('TAP_DEPUTY_DOMAIN'),
         }
 
-    @classmethod
-    def get_credentials(cls):
+    @staticmethod
+    def get_credentials():
         return {
             'client_id': os.getenv('TAP_DEPUTY_CLIENT_ID'),
             'client_secret': os.getenv('TAP_DEPUTY_CLIENT_SECRET'),
             'redirect_uri': os.getenv('TAP_DEPUTY_REDIRECT_URI'),
-            'refresh_token': cls._current_refresh_token or os.getenv('TAP_DEPUTY_REFRESH_TOKEN'),
-            # access_token is required in --dev mode so the tap skips the
-            # OAuth endpoint entirely and uses this token directly.
+            'refresh_token': os.getenv('TAP_DEPUTY_REFRESH_TOKEN'),
             'access_token': os.getenv('TAP_DEPUTY_ACCESS_TOKEN'),
         }
 

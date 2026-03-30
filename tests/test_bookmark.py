@@ -20,7 +20,7 @@ from copy import deepcopy
 
 from tap_tester.base_suite_tests.bookmark_test import BookmarkTest
 
-from base import DeputyBase, _DEV_WRAPPER_PATH
+from base import DeputyBase
 
 
 class DeputyBookmarkTest(BookmarkTest, DeputyBase):
@@ -29,10 +29,10 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
     # -------------------------------------------------------------------
     # Bookmark wire format used by tap-deputy (plain ISO-8601 string)
     # -------------------------------------------------------------------
-    # Deputy writes bookmarks as ISO-8601 with a UTC-offset, e.g.
-    # "2026-03-27T00:02:56-07:00".  Python's %z directive handles ±HH:MM
-    # offsets in 3.7+ so this matches the actual wire format exactly.
-    bookmark_format = "%Y-%m-%dT%H:%M:%S%z"
+    # Deputy bookmarks are stored with local timezone offsets (e.g. -07:00)
+    # but get_bookmark_value normalizes them to UTC via singer.utils.strftime,
+    # which always produces the format: 2026-03-29T07:02:55.000000Z
+    bookmark_format = "%Y-%m-%dT%H:%M:%S.%fZ"
 
     # Pre-seed state so that sync 1 only replays the most recent data,
     # keeping wall-clock time reasonable.  The date is intentionally set
@@ -87,27 +87,19 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
 
         The base-class implementation calls ``.get(replication_key)`` on the
         stream bookmark, which would raise ``AttributeError`` on a plain string.
-        This override reads the scalar value directly.
+        This override reads the scalar value directly and normalizes it to UTC
+        so the test's ``parse_date`` comparison is always between UTC datetimes
+        (matching the transformed record values which Singer converts to UTC).
         """
+        from singer.utils import strptime_to_utc, strftime
         replication_method = self.expected_replication_method(stream)
         if replication_method != self.INCREMENTAL:
             return None
-        return state.get('bookmarks', {}).get(stream) or None
-
-    def run_and_verify_sync_mode(self, conn_id):
-        """
-        Re-assert ``STITCH_TAP_PATH`` before every sync invocation.
-
-        ``InMemoryBackend.run_sync_mode`` reads ``STITCH_TAP_PATH`` via
-        ``os.getenv`` at call time, so both the first and second sync should
-        pick it up correctly.  However, if the first sync subprocess runs
-        without ``--dev`` for any reason (e.g. a transient env-var loss or
-        a test-runner that resets the environment between calls), it triggers
-        a real OAuth exchange that rotates the Deputy refresh token—leaving
-        the second sync with an invalid token and no ``--dev`` protection.
-
-        Re-pinning the path before every call guarantees dev mode is active
-        for each sync, preventing the OAuth rotation side-effect.
-        """
-        os.environ['STITCH_TAP_PATH'] = _DEV_WRAPPER_PATH
-        return super().run_and_verify_sync_mode(conn_id)
+        raw = state.get('bookmarks', {}).get(stream)
+        if not raw:
+            return None
+        # Normalize to UTC Z-suffix so parse_date comparison works correctly.
+        try:
+            return strftime(strptime_to_utc(raw))
+        except Exception:  # pylint: disable=broad-except
+            return raw
