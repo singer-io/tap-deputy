@@ -133,6 +133,7 @@ def discover(client):
     for resource_name in RESOURCES.keys():
         schema_dict, metadata = get_schema(client, resource_name)
         schema = Schema.from_dict(schema_dict)
+
         stream_name = RESOURCES[resource_name]
 
         catalog.streams.append(CatalogEntry(
