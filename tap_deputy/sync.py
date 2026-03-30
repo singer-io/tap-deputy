@@ -1,10 +1,26 @@
 import singer
 from singer import metrics, metadata, Transformer
 from singer.bookmarks import set_currently_syncing
+from singer.utils import strptime_to_utc, strftime
 
 from tap_deputy.discover import discover
 
 LOGGER = singer.get_logger()
+
+
+def normalize_datetime(dt_str):
+    """
+    Normalize any ISO-8601 datetime string to the UTC ``Z``-suffix format
+    that the Deputy QUERY API accepts, e.g. ``2026-03-27T07:02:56Z``.
+
+    The tap writes bookmarks using the raw value of the ``Modified`` field,
+    which Deputy returns with a local timezone offset (e.g. ``-07:00``).
+    Passing that offset form back to the QUERY ``ge`` filter causes a 400.
+    """
+    try:
+        return strftime(strptime_to_utc(dt_str))
+    except Exception:  # pylint: disable=broad-except
+        return dt_str  # fall back to original if unparseable
 
 def get_bookmark(state, stream_name, default):
     return state.get('bookmarks', {}).get(stream_name, default)
@@ -23,7 +39,9 @@ def process_records(stream, mdata, max_modified, records):
     schema = stream.schema.to_dict()
     with metrics.record_counter(stream.tap_stream_id) as counter:
         for record in records:
-            if record['Modified'] > max_modified:
+            # Compare as UTC datetimes so records with local-timezone offsets
+            # (e.g. "-07:00") are ordered correctly against Z-suffix bookmarks.
+            if strptime_to_utc(record['Modified']) > strptime_to_utc(max_modified):
                 max_modified = record['Modified']
 
             with Transformer() as transformer:
@@ -37,6 +55,11 @@ def process_records(stream, mdata, max_modified, records):
 def sync_stream(client, catalog, state, start_date, stream, mdata):
     stream_name = stream.tap_stream_id
     last_datetime = get_bookmark(state, stream_name, start_date)
+    # Normalize to UTC Z-suffix format accepted by the Deputy QUERY API.
+    # Bookmarks are stored using the raw Modified field value which Deputy
+    # returns with a local offset (e.g. 2026-03-27T00:02:56-07:00); passing
+    # that back as a filter causes a 400 Bad Request.
+    query_datetime = normalize_datetime(last_datetime)
 
     LOGGER.info('{} - Syncing data since {}'.format(stream.tap_stream_id, last_datetime))
 
@@ -55,7 +78,7 @@ def sync_stream(client, catalog, state, start_date, stream, mdata):
                 's1': {
                     'field': 'Modified',
                     'type': 'ge',
-                    'data': last_datetime
+                    'data': query_datetime
                 }
             },
             'sort': {
