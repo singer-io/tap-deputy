@@ -1,7 +1,4 @@
-import singer
 from singer.catalog import Catalog, CatalogEntry, Schema
-
-LOGGER = singer.get_logger()
 
 RESOURCES = {
     'Address': 'addresses',
@@ -83,9 +80,7 @@ def get_schema(client, resource_name):
         {
             'breadcrumb': [],
             'metadata': {
-                'tap-deputy.resource': resource_name,
-                'forced-replication-method': 'INCREMENTAL',
-                'valid-replication-keys': ['Modified'],
+                'tap-deputy.resource': resource_name
             }
         }
     ]
@@ -101,11 +96,6 @@ def get_schema(client, resource_name):
                 'format': 'date-time'
             }
         else:
-            if field_type not in TYPE_MAP:
-                LOGGER.warning(
-                    'Skipping field %s on resource %s: unknown type %s',
-                    field_name, resource_name, field_type)
-                continue
             json_schema = {
                 'type': ['null', TYPE_MAP[field_type]]
             }
@@ -115,7 +105,7 @@ def get_schema(client, resource_name):
         metadata.append({
             'breadcrumb': ['properties', field_name],
             'metadata': {
-                'inclusion': 'automatic' if field_name in ('Id', 'Modified') else 'available'
+                'inclusion': 'automatic' if field_name == 'Id' else 'available'
             }
         })
 
