@@ -78,19 +78,34 @@ def get_schema(client, resource_name):
         '/api/v1/resource/{}/INFO'.format(resource_name),
         endpoint='resource_info')
 
-    properties = {}
+    # Always include Id and Modified — sync.py relies on them for every stream.
+    properties = {
+        'Id': {'type': ['null', 'integer']},
+        'Modified': {'type': ['null', 'string'], 'format': 'date-time'},
+    }
     metadata = [
         {
             'breadcrumb': [],
             'metadata': {
                 'tap-deputy.resource': resource_name,
+                'table-key-properties': ['Id'],
                 'forced-replication-method': 'INCREMENTAL',
                 'valid-replication-keys': ['Modified'],
             }
-        }
+        },
+        {
+            'breadcrumb': ['properties', 'Id'],
+            'metadata': {'inclusion': 'automatic'}
+        },
+        {
+            'breadcrumb': ['properties', 'Modified'],
+            'metadata': {'inclusion': 'automatic'}
+        },
     ]
 
     for field_name, field_type in data['fields'].items():
+        if field_name in ('Id', 'Modified'):
+            continue  # already seeded above
         # Skipping all fields of type Json until we decide on how to handle "[]" as null response
         # Json data fields
         if field_type == "Json":
@@ -115,7 +130,7 @@ def get_schema(client, resource_name):
         metadata.append({
             'breadcrumb': ['properties', field_name],
             'metadata': {
-                'inclusion': 'automatic' if field_name in ('Id', 'Modified') else 'available'
+                'inclusion': 'available'
             }
         })
 
