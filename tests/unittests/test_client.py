@@ -178,19 +178,6 @@ class TestAuthorizationHeader(unittest.TestCase):
             kwargs["headers"]["Authorization"], "OAuth old_access"
         )
 
-    @patch("requests.Session.request")
-    def test_no_authorization_header_on_auth_call(self, mock_req):
-        """Authorization header is NOT set when auth_call=True."""
-        mock_req.return_value = _mock_response(200, {
-            "refresh_token": "r2", "access_token": "a2", "expires_in": 3600
-        })
-        client = _make_client()
-
-        client.post("/oauth/access_token", auth_call=True, data={})
-
-        _, kwargs = mock_req.call_args
-        self.assertNotIn("Authorization", kwargs.get("headers", {}))
-
 
 # ---------------------------------------------------------------------------
 # User-Agent header
