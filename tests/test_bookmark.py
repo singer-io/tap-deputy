@@ -44,10 +44,6 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
         'bookmarks': {stream: '2025-01-01T00:00:00Z' for stream in ["system_usage_tracking", "system_usage_balances"]}
     }
 
-    @staticmethod
-    def name():
-        return "tap_tester_deputy_bookmark_test"
-
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
 

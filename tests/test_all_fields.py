@@ -16,9 +16,5 @@ from base import DeputyBase
 class DeputyAllFieldsTest(AllFieldsTest, DeputyBase):
     """Test that with all fields selected, all fields are replicated"""
 
-    @staticmethod
-    def name():
-        return "tap_tester_deputy_all_fields_test"
-
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}

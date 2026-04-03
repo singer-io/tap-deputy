@@ -6,8 +6,8 @@ classes stay DRY and comparable across the suite.
 
 Authentication notes
 --------------------
-tap-deputy tests always run in --dev mode.  The tap uses ``access_token``
-directly and never calls the OAuth endpoint, so token rotation does not occur.
+A fresh ``access_token`` is obtained at test-class setup time by exchanging the
+``refresh_token`` via Deputy's OAuth endpoint.
 
 The following environment variables must be set before running any test:
 
@@ -15,16 +15,13 @@ The following environment variables must be set before running any test:
     TAP_DEPUTY_CLIENT_ID       – OAuth application client ID
     TAP_DEPUTY_CLIENT_SECRET   – OAuth application client secret
     TAP_DEPUTY_REDIRECT_URI    – registered redirect URI for the OAuth app
-    TAP_DEPUTY_REFRESH_TOKEN   – refresh token (not used in dev mode but required by tap config)
-    TAP_DEPUTY_ACCESS_TOKEN    – live access token used directly in --dev mode
+    TAP_DEPUTY_REFRESH_TOKEN   – long-lived refresh token
 """
 import os
 
 from tap_tester.base_suite_tests.base_case import BaseCase
+from test_client import DeputyTestClient
 
-
-# Path for the auto-generated --dev wrapper (written at test-class setup time).
-_DEV_WRAPPER_PATH = '/tmp/tap-deputy-dev'
 
 # ---------------------------------------------------------------------------
 # All Deputy API resource → stream-name mappings (mirrors tap_deputy/discover.py)
@@ -98,7 +95,6 @@ _REQUIRED_ENV_VARS = [
     'TAP_DEPUTY_CLIENT_SECRET',
     'TAP_DEPUTY_REDIRECT_URI',
     'TAP_DEPUTY_REFRESH_TOKEN',
-    'TAP_DEPUTY_ACCESS_TOKEN',  # required for --dev mode (no OAuth call is made)
 ]
 
 
@@ -116,6 +112,10 @@ class DeputyBase(BaseCase):
         return "tap-deputy"
 
     @staticmethod
+    def name():
+        return "tap_tester_tap_deputy"
+
+    @staticmethod
     def get_type():
         return "platform.deputy"
 
@@ -127,12 +127,13 @@ class DeputyBase(BaseCase):
 
     @staticmethod
     def get_credentials():
+        token = DeputyTestClient.get_token_information()
         return {
-            'client_id': os.getenv('TAP_DEPUTY_CLIENT_ID'),
-            'client_secret': os.getenv('TAP_DEPUTY_CLIENT_SECRET'),
-            'redirect_uri': os.getenv('TAP_DEPUTY_REDIRECT_URI'),
-            'refresh_token': os.getenv('TAP_DEPUTY_REFRESH_TOKEN'),
-            'access_token': os.getenv('TAP_DEPUTY_ACCESS_TOKEN'),
+            'client_id': token['client_id'],
+            'client_secret': token['client_secret'],
+            'redirect_uri': token['redirect_uri'],
+            'refresh_token': token['refresh_token'],
+            'access_token': token['access_token'],
         }
 
     @staticmethod
@@ -163,27 +164,4 @@ class DeputyBase(BaseCase):
         missing_envs = [v for v in _REQUIRED_ENV_VARS if os.getenv(v) is None]
         if missing_envs:
             raise ValueError(f"Missing environment variables: {missing_envs}")
-
-        # Write a tiny Python wrapper to /tmp that forwards all args to
-        # tap-deputy with --dev appended.  No committed script is needed.
-        import shutil, stat, sys, textwrap
-        # Resolve the real tap-deputy executable path before we overwrite
-        # STITCH_TAP_PATH, so the wrapper always uses an absolute path.
-        tap_deputy_path = (
-            os.getenv('STITCH_TAP_PATH')
-            or shutil.which('tap-deputy')
-        )
-        if not tap_deputy_path:
-            raise RuntimeError("Cannot locate tap-deputy executable. "
-                               "Set STITCH_TAP_PATH or ensure tap-deputy is on PATH.")
-        with open(_DEV_WRAPPER_PATH, 'w') as fh:
-            fh.write(textwrap.dedent(f"""\
-                #!{sys.executable}
-                import os, sys
-                os.execv({tap_deputy_path!r}, [{tap_deputy_path!r}] + sys.argv[1:] + ['--dev'])
-            """))
-        os.chmod(_DEV_WRAPPER_PATH,
-                 os.stat(_DEV_WRAPPER_PATH).st_mode
-                 | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        os.environ['STITCH_TAP_PATH'] = _DEV_WRAPPER_PATH
 

@@ -19,9 +19,5 @@ from base import DeputyBase
 class DeputyMinimumSelectionTest(MinimumSelectionTest, DeputyBase):
     """Test that the tap replicates records even with only automatic fields selected"""
 
-    @staticmethod
-    def name():
-        return "tap_tester_deputy_automatic_fields_test"
-
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
