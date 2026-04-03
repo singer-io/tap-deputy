@@ -51,6 +51,20 @@ class DeputyTestClient:
         redirect_uri = required['TAP_DEPUTY_REDIRECT_URI']
         refresh_token = required['TAP_DEPUTY_REFRESH_TOKEN']
 
+        # If a ready-to-use access token is already in the environment (e.g.
+        # obtained manually or via a prior refresh), use it directly and skip
+        # the OAuth round-trip.  This avoids invalidating the refresh token
+        # on accounts where only one outstanding access token is permitted.
+        access_token = os.getenv('TAP_DEPUTY_ACCESS_TOKEN')
+        if access_token:
+            return {
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'redirect_uri': redirect_uri,
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+            }
+
         response = requests.post(
             f"https://{domain}/oauth/access_token",
             data={

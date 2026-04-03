@@ -18,6 +18,10 @@ from base import DeputyBase
 class DeputyStartDateTest(StartDateTest, DeputyBase):
     """A later start_date must yield a strict subset of the records from an earlier one."""
 
+    @staticmethod
+    def name():
+        return "tap_tester_deputy_start_date_test"
+
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
 
