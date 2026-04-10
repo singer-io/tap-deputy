@@ -123,7 +123,12 @@ def get_schema(client, resource_name):
     )
     mdata = metadata.to_map(mdata)
     metadata.write(mdata, (), 'tap-deputy.resource', resource_name)
+    # get_standard_metadata only marks key_properties as automatic;
+    # the replication key must also be automatic so it is always selected.
+    metadata.write(mdata, ('properties', 'Modified'), 'inclusion', 'automatic')
     mdata = metadata.to_list(mdata)
+    # singer returns breadcrumbs as tuples; normalise to lists for consistency.
+    mdata = [{'breadcrumb': list(m['breadcrumb']), 'metadata': m['metadata']} for m in mdata]
 
     return schema, mdata
 
