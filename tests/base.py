@@ -17,10 +17,12 @@ The following environment variables must be set before running any test:
     TAP_DEPUTY_REDIRECT_URI    – registered redirect URI for the OAuth app
     TAP_DEPUTY_REFRESH_TOKEN   – long-lived refresh token
 """
+import json
 import os
 
 from tap_tester.base_suite_tests.base_case import BaseCase
-from test_client import DeputyTestClient
+from tap_tester.logger import LOGGER
+from tap_tester import runner
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +97,7 @@ _REQUIRED_ENV_VARS = [
     'TAP_DEPUTY_CLIENT_SECRET',
     'TAP_DEPUTY_REDIRECT_URI',
     'TAP_DEPUTY_REFRESH_TOKEN',
+    'TAP_DEPUTY_ACCESS_TOKEN',  # used by the tap in --dev mode
 ]
 
 
@@ -112,10 +115,6 @@ class DeputyBase(BaseCase):
         return "tap-deputy"
 
     @staticmethod
-    def name():
-        return "tap_tester_tap_deputy"
-
-    @staticmethod
     def get_type():
         return "platform.deputy"
 
@@ -127,13 +126,16 @@ class DeputyBase(BaseCase):
 
     @staticmethod
     def get_credentials():
-        token = DeputyTestClient.get_token_information()
+        # _refresh_tokens_from_config updates env vars from the config file
+        # written by the tap during a previous run, ensuring rotated tokens
+        # survive across separate tap-tester process invocations.
+        DeputyBase._refresh_tokens_from_config()
         return {
-            'client_id': token['client_id'],
-            'client_secret': token['client_secret'],
-            'redirect_uri': token['redirect_uri'],
-            'refresh_token': token['refresh_token'],
-            'access_token': token['access_token'],
+            'client_id': os.getenv('TAP_DEPUTY_CLIENT_ID'),
+            'client_secret': os.getenv('TAP_DEPUTY_CLIENT_SECRET'),
+            'redirect_uri': os.getenv('TAP_DEPUTY_REDIRECT_URI'),
+            'refresh_token': os.getenv('TAP_DEPUTY_REFRESH_TOKEN'),
+            'access_token': os.getenv('TAP_DEPUTY_ACCESS_TOKEN'),
         }
 
     @staticmethod
@@ -154,14 +156,113 @@ class DeputyBase(BaseCase):
             for stream in ALL_STREAM_NAMES
         }
 
+    @staticmethod
+    def _load_env_script():
+        """
+        Parse /tmp/tap_deputy_env.sh (written by tearDownClass) and load any
+        'export KEY="VALUE"' lines into the current process environment.
+        Called at the very start of setUpClass so every test class begins with
+        the most recently rotated tokens.
+        """
+        env_script = '/tmp/tap_deputy_env.sh'
+        if not os.path.exists(env_script):
+            return
+        with open(env_script, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith('export '):
+                    continue
+                # strip leading 'export '
+                assignment = line[len('export '):]
+                if '=' not in assignment:
+                    continue
+                key, _, value = assignment.partition('=')
+                # strip surrounding quotes
+                value = value.strip('"\'')
+                os.environ[key] = value
+                LOGGER.info("_load_env_script: loaded %s from %s", key, env_script)
+
+    @staticmethod
+    def _refresh_tokens_from_config():
+        """
+        Read rotated tokens the tap wrote back to /tmp/tap_tester_config.json
+        and propagate them into the process environment variables so every
+        subsequent get_credentials() / ensure_connection() call uses the
+        latest tokens automatically.
+        Returns the rotated dict (empty dict if file absent).
+        """
+        TAP_CONFIG_PATH = '/tmp/tap_tester_config.json'
+        if not os.path.exists(TAP_CONFIG_PATH):
+            return {}
+        with open(TAP_CONFIG_PATH, 'r') as f:
+            rotated = json.load(f)
+        if rotated.get('refresh_token'):
+            os.environ['TAP_DEPUTY_REFRESH_TOKEN'] = rotated['refresh_token']
+            LOGGER.info("_refresh_tokens_from_config: updated TAP_DEPUTY_REFRESH_TOKEN")
+        if rotated.get('access_token'):
+            os.environ['TAP_DEPUTY_ACCESS_TOKEN'] = rotated['access_token']
+            LOGGER.info("_refresh_tokens_from_config: updated TAP_DEPUTY_ACCESS_TOKEN")
+        return rotated
+
+    def run_sync_mode(self, conn_id):
+        """
+        Before syncing, refresh the connection's stored credentials with any
+        tokens rotated by the tap during the preceding check/discovery run.
+        Without this, run_sync_mode would overwrite the config file with the
+        stale snapshot taken at ensure_connection time, causing a 400 on the
+        next token-refresh attempt.
+        """
+        rotated = self._refresh_tokens_from_config()
+        conn = runner.BACKEND.connections.get(conn_id)
+        if conn and rotated:
+            for key in ('refresh_token', 'access_token', 'expires_at'):
+                if rotated.get(key):
+                    conn['credentials'][key] = rotated[key]
+            LOGGER.info("run_sync_mode: patched connection %s with rotated tokens", conn_id)
+        return super().run_sync_mode(conn_id)
+
     # ------------------------------------------------------------------
     # Environment guard
     # ------------------------------------------------------------------
 
     @classmethod
     def setUpClass(cls, logging="Ensuring environment variables are sourced."):  # pylint: disable=invalid-name
+        DeputyBase._load_env_script()
         super().setUpClass(logging=logging)
         missing_envs = [v for v in _REQUIRED_ENV_VARS if os.getenv(v) is None]
         if missing_envs:
             raise ValueError(f"Missing environment variables: {missing_envs}")
+
+    @classmethod
+    def tearDownClass(cls):  # pylint: disable=invalid-name
+        """
+        After all test methods in the class finish, write the latest rotated
+        tokens to /tmp/tap_deputy_env.sh so the caller can source it to update
+        their shell session:
+
+            source /tmp/tap_deputy_env.sh
+        """
+        DeputyBase._refresh_tokens_from_config()
+        env_script = '/tmp/tap_deputy_env.sh'
+        lines = [
+            '#!/usr/bin/env bash',
+            '# Auto-generated by DeputyBase.tearDownClass — do not edit manually.',
+        ]
+        for var in ('TAP_DEPUTY_REFRESH_TOKEN', 'TAP_DEPUTY_ACCESS_TOKEN'):
+            val = os.getenv(var, '')
+            if val:
+                lines.append(f'export {var}="{val}"')
+        with open(env_script, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+        LOGGER.info("tearDownClass: rotated tokens written to %s — run: source %s", env_script, env_script)
+        super().tearDownClass()
+
+    def tearDown(self, *args, logging="Propagating rotated tokens to env vars.", **kwargs):  # pylint: disable=invalid-name
+        """
+        After each test method, propagate any rotated tokens the tap wrote back
+        to the config file into env vars so the next ensure_connection /
+        get_credentials call picks them up automatically.
+        """
+        self._refresh_tokens_from_config()
+        super().tearDown(*args, logging=logging, **kwargs)
 

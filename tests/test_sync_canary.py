@@ -16,6 +16,10 @@ from base import DeputyBase
 class DeputySyncCanaryTest(SyncCanaryTest, DeputyBase):
     """The tap must produce at least one record to confirm end-to-end connectivity."""
 
+    @staticmethod
+    def name():
+        return "tap_tester_deputy_sync_canary_test"
+
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
 
