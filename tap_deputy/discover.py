@@ -1,4 +1,5 @@
 import singer
+from singer import metadata
 from singer.catalog import Catalog, CatalogEntry, Schema
 
 LOGGER = singer.get_logger()
@@ -83,25 +84,6 @@ def get_schema(client, resource_name):
         'Id': {'type': ['null', 'integer']},
         'Modified': {'type': ['null', 'string'], 'format': 'date-time'},
     }
-    metadata = [
-        {
-            'breadcrumb': [],
-            'metadata': {
-                'tap-deputy.resource': resource_name,
-                'table-key-properties': ['Id'],
-                'forced-replication-method': 'INCREMENTAL',
-                'valid-replication-keys': ['Modified'],
-            }
-        },
-        {
-            'breadcrumb': ['properties', 'Id'],
-            'metadata': {'inclusion': 'automatic'}
-        },
-        {
-            'breadcrumb': ['properties', 'Modified'],
-            'metadata': {'inclusion': 'automatic'}
-        },
-    ]
 
     for field_name, field_type in data['fields'].items():
         if field_name in ('Id', 'Modified'):
@@ -127,26 +109,29 @@ def get_schema(client, resource_name):
 
         properties[field_name] = json_schema
 
-        metadata.append({
-            'breadcrumb': ['properties', field_name],
-            'metadata': {
-                'inclusion': 'available'
-            }
-        })
-
     schema = {
         'type': 'object',
         'additionalProperties': False,
         'properties': properties
     }
 
-    return schema, metadata
+    mdata = metadata.get_standard_metadata(
+        schema=schema,
+        key_properties=['Id'],
+        valid_replication_keys=['Modified'],
+        replication_method='INCREMENTAL',
+    )
+    mdata = metadata.to_map(mdata)
+    metadata.write(mdata, (), 'tap-deputy.resource', resource_name)
+    mdata = metadata.to_list(mdata)
+
+    return schema, mdata
 
 def discover(client):
     catalog = Catalog([])
 
     for resource_name in RESOURCES.keys():
-        schema_dict, metadata = get_schema(client, resource_name)
+        schema_dict, mdata = get_schema(client, resource_name)
         schema = Schema.from_dict(schema_dict)
 
         stream_name = RESOURCES[resource_name]
@@ -156,7 +141,7 @@ def discover(client):
             tap_stream_id=stream_name,
             key_properties=['Id'],
             schema=schema,
-            metadata=metadata
+            metadata=mdata
         ))
 
     return catalog
