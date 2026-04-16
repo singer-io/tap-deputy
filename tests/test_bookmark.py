@@ -26,6 +26,10 @@ from base import DeputyBase
 class DeputyBookmarkTest(BookmarkTest, DeputyBase):
     """A pre-seeded state must cause the second sync to skip already-seen records."""
 
+    @staticmethod
+    def name():
+        return "tap_tester_deputy_bookmark_test"
+
     # -------------------------------------------------------------------
     # Bookmark wire format used by tap-deputy (plain ISO-8601 string)
     # -------------------------------------------------------------------
@@ -43,10 +47,6 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
     initial_bookmarks = {
         'bookmarks': {stream: '2025-01-01T00:00:00Z' for stream in ["system_usage_tracking", "system_usage_balances"]}
     }
-
-    @staticmethod
-    def name():
-        return "tap_tester_deputy_bookmark_test"
 
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}

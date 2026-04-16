@@ -1,4 +1,8 @@
+import singer
+from singer import metadata
 from singer.catalog import Catalog, CatalogEntry, Schema
+
+LOGGER = singer.get_logger()
 
 RESOURCES = {
     'Address': 'addresses',
@@ -75,17 +79,15 @@ def get_schema(client, resource_name):
         '/api/v1/resource/{}/INFO'.format(resource_name),
         endpoint='resource_info')
 
-    properties = {}
-    metadata = [
-        {
-            'breadcrumb': [],
-            'metadata': {
-                'tap-deputy.resource': resource_name
-            }
-        }
-    ]
+    # Always include Id and Modified — sync.py relies on them for every stream.
+    properties = {
+        'Id': {'type': ['null', 'integer']},
+        'Modified': {'type': ['null', 'string'], 'format': 'date-time'},
+    }
 
     for field_name, field_type in data['fields'].items():
+        if field_name in ('Id', 'Modified'):
+            continue  # already seeded above
         # Skipping all fields of type Json until we decide on how to handle "[]" as null response
         # Json data fields
         if field_type == "Json":
@@ -96,18 +98,16 @@ def get_schema(client, resource_name):
                 'format': 'date-time'
             }
         else:
+            if field_type not in TYPE_MAP:
+                LOGGER.warning(
+                    'Skipping field %s on resource %s: unknown type %s',
+                    field_name, resource_name, field_type)
+                continue
             json_schema = {
                 'type': ['null', TYPE_MAP[field_type]]
             }
 
         properties[field_name] = json_schema
-
-        metadata.append({
-            'breadcrumb': ['properties', field_name],
-            'metadata': {
-                'inclusion': 'automatic' if field_name == 'Id' else 'available'
-            }
-        })
 
     schema = {
         'type': 'object',
@@ -115,13 +115,28 @@ def get_schema(client, resource_name):
         'properties': properties
     }
 
-    return schema, metadata
+    mdata = metadata.get_standard_metadata(
+        schema=schema,
+        key_properties=['Id'],
+        valid_replication_keys=['Modified'],
+        replication_method='INCREMENTAL',
+    )
+    mdata = metadata.to_map(mdata)
+    metadata.write(mdata, (), 'tap-deputy.resource', resource_name)
+    # get_standard_metadata only marks key_properties as automatic;
+    # the replication key must also be automatic so it is always selected.
+    metadata.write(mdata, ('properties', 'Modified'), 'inclusion', 'automatic')
+    mdata = metadata.to_list(mdata)
+    # singer returns breadcrumbs as tuples; normalise to lists for consistency.
+    mdata = [{'breadcrumb': list(m['breadcrumb']), 'metadata': m['metadata']} for m in mdata]
+
+    return schema, mdata
 
 def discover(client):
     catalog = Catalog([])
 
     for resource_name in RESOURCES.keys():
-        schema_dict, metadata = get_schema(client, resource_name)
+        schema_dict, mdata = get_schema(client, resource_name)
         schema = Schema.from_dict(schema_dict)
 
         stream_name = RESOURCES[resource_name]
@@ -131,7 +146,7 @@ def discover(client):
             tap_stream_id=stream_name,
             key_properties=['Id'],
             schema=schema,
-            metadata=metadata
+            metadata=mdata
         ))
 
     return catalog
