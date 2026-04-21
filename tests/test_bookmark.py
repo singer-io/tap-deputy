@@ -28,7 +28,7 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
 
     @staticmethod
     def name():
-        return "tap_tester_deputy_bookmark_test"
+        return "tap_tester_deputy_combined_test"
 
     # -------------------------------------------------------------------
     # Bookmark wire format used by tap-deputy (plain ISO-8601 string)

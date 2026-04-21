@@ -18,7 +18,7 @@ class DeputyAllFieldsTest(AllFieldsTest, DeputyBase):
 
     @staticmethod
     def name():
-        return "tap_tester_deputy_all_fields_test"
+        return "tap_tester_deputy_combined_test"
 
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
