@@ -16,6 +16,7 @@ The following environment variables must be set before running any test:
     TAP_DEPUTY_CLIENT_SECRET   – OAuth application client secret
     TAP_DEPUTY_REDIRECT_URI    – registered redirect URI for the OAuth app
     TAP_DEPUTY_REFRESH_TOKEN   – long-lived refresh token
+    TAP_DEPUTY_ACCESS_TOKEN    – access token used by the tap in --dev mode
 """
 import json
 import os
