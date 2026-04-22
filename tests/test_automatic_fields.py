@@ -4,12 +4,10 @@ replication key ``Modified``), the tap still replicates records correctly.
 
 Note on Deputy catalog inclusions
 ----------------------------------
-tap-deputy marks only ``Id`` as ``inclusion: automatic`` in the catalog; all
-other fields (including ``Modified``) are ``inclusion: available``.  At the
-Singer spec level, however, the replication key must always be present in
-records for bookmarking to work correctly.  This test therefore treats *both*
-``Id`` and ``Modified`` as the minimum required field set, matching the
-``expected_automatic_fields`` computed by BaseCase (PRIMARY_KEYS | REPLICATION_KEYS).
+tap-deputy marks both ``Id`` and ``Modified`` as automatic/minimum required
+fields for this test scenario. This matches the catalog metadata produced by
+discovery and the ``expected_automatic_fields`` computed by BaseCase
+(PRIMARY_KEYS | REPLICATION_KEYS).
 """
 from tap_tester.base_suite_tests.automatic_fields_test import MinimumSelectionTest
 
