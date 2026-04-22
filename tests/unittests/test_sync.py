@@ -402,9 +402,19 @@ class TestUtils(unittest.TestCase):
 
     def test_read_config_raises_on_missing_file(self):
         """read_config raises Exception for a non-existent path."""
+        import os
+        import tempfile
+        import uuid
         from tap_deputy.utils import read_config
+
+        missing_path = os.path.join(
+            tempfile.gettempdir(),
+            f"definitely_does_not_exist_deputy_{uuid.uuid4().hex}.json",
+        )
+        self.assertFalse(os.path.exists(missing_path))
+
         with self.assertRaises(Exception) as ctx:
-            read_config("/tmp/definitely_does_not_exist_deputy.json")
+            read_config(missing_path)
         self.assertIn("Failed to load config", str(ctx.exception))
 
     def test_write_config_merges_and_persists(self):
