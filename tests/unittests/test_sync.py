@@ -56,7 +56,7 @@ def _make_mdata(resource_name="Employee"):
 def _make_records(count, base_date="2024-01-01T00:00:00Z"):
     """Build a list of minimal employee records with valid, sequential Modified timestamps."""
     from datetime import datetime, timedelta, timezone
-    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    base = datetime.strptime(base_date, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     return [
         {
             "Id": i,
