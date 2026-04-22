@@ -6,7 +6,7 @@ executors:
       - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:stitch-tap-tester-uv
 
 jobs:
-  build:
+  ensure_env:
     executor: docker-executor
     steps:
       - checkout
@@ -17,6 +17,19 @@ jobs:
             source /usr/local/share/virtualenvs/tap-deputy/bin/activate
             uv pip install -U 'pip>=24.0' 'setuptools>=70.0.0'
             uv pip install .[dev]
+            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/tap_tester_sandbox /usr/local/share/virtualenvs/dev_env.sh
+      - persist_to_workspace:
+          root: /
+          paths:
+            - usr/local/share/virtualenvs/
+            - root/.local/share/uv/python
+
+  run_pylint_and_unittests:
+    executor: docker-executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /
       - run:
           name: 'pylint'
           command: |
@@ -26,28 +39,98 @@ jobs:
           name: 'Unit Tests'
           command: |
             source /usr/local/share/virtualenvs/tap-deputy/bin/activate
-            uv pip install coverage
-            uv pip install pytest coverage parameterized
+            uv pip install coverage pytest parameterized
             coverage run -m pytest tests/unittests
             coverage html
       - store_test_results:
           path: test_output/report.xml
       - store_artifacts:
           path: htmlcov
-      - add_ssh_keys
+
+  integration_tests:
+    executor: docker-executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /
       - run:
-          name: 'Integration Tests'
+          name: 'Fetch rotated tokens from S3 (if they exist)'
           command: |
+            # Deputy tokens rotate on every use.  After each CI run we push
+            # the freshest pair back to S3.  On the next run we pull them in
+            # and override whatever stale values dev_env.sh may have.
+            TOKEN_PATH=s3://com-stitchdata-dev-deployment-assets/environments/tap-deputy/rotating_tokens.json
+            if aws s3 cp "$TOKEN_PATH" /tmp/deputy_rotating_tokens.json 2>/dev/null; then
+              echo "Fetched rotated tokens from S3"
+            else
+              echo "No rotated tokens in S3 yet — will use dev_env.sh values"
+            fi
+      - run:
+          name: 'Run all integration tests (single process for token chaining)'
+          no_output_timeout: 45m
+          command: |
+            source /usr/local/share/virtualenvs/dev_env.sh
+            # Override with rotated tokens if they were fetched above
+            if [ -f /tmp/deputy_rotating_tokens.json ]; then
+              export TAP_DEPUTY_REFRESH_TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/deputy_rotating_tokens.json'))['refresh_token'])")
+              export TAP_DEPUTY_ACCESS_TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/deputy_rotating_tokens.json'))['access_token'])")
+            fi
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
-            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/tap_tester_sandbox dev_env.sh
-            source dev_env.sh
+            mkdir -p /tmp/${CIRCLE_PROJECT_REPONAME}
+            export STITCH_CONFIG_DIR=/tmp/${CIRCLE_PROJECT_REPONAME}
             run-test --tap=tap-deputy tests
+      - run:
+          name: 'Push rotated tokens back to S3'
+          when: always
+          command: |
+            CONFIG_FILE="/tmp/tap_tester_config.json"
+            TOKEN_PATH=s3://com-stitchdata-dev-deployment-assets/environments/tap-deputy/rotating_tokens.json
+            if [ -f "$CONFIG_FILE" ]; then
+              # Extract just the tokens into a small JSON
+              python3 -c "
+import json, sys
+with open('$CONFIG_FILE') as f:
+    cfg = json.load(f)
+tokens = {}
+for k in ('refresh_token', 'access_token'):
+    if cfg.get(k):
+        tokens[k] = cfg[k]
+if tokens:
+    json.dump(tokens, sys.stdout)
+    print()
+" > /tmp/deputy_tokens_upload.json
+              if [ -s /tmp/deputy_tokens_upload.json ]; then
+                aws s3 cp /tmp/deputy_tokens_upload.json "$TOKEN_PATH"
+                echo "Pushed rotated tokens to S3"
+              else
+                echo "No tokens to push"
+              fi
+            else
+              echo "No config file found at $CONFIG_FILE — skipping token push"
+            fi
+      - store_artifacts:
+          path: /tmp/tap-deputy
+
 workflows:
   version: 2
-  commit:
+  commit: &commit_jobs
     jobs:
-      - build:
-          context: circleci-user
+      - ensure_env:
+          context:
+            - circleci-user
+            - tier-1-tap-user
+      - run_pylint_and_unittests:
+          context:
+            - circleci-user
+            - tier-1-tap-user
+          requires:
+            - ensure_env
+      - integration_tests:
+          context:
+            - circleci-user
+            - tier-1-tap-user
+          requires:
+            - ensure_env
   build_daily:
     triggers:
       - schedule:
@@ -57,5 +140,13 @@ workflows:
               only:
                 - master
     jobs:
-      - build:
-          context: circleci-user
+      - ensure_env:
+          context:
+            - circleci-user
+            - tier-1-tap-user
+      - integration_tests:
+          context:
+            - circleci-user
+            - tier-1-tap-user
+          requires:
+            - ensure_env
