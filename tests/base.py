@@ -153,13 +153,8 @@ class DeputyBase(BaseCase):
             for stream in ALL_STREAM_NAMES
         }
 
-    def ensure_connection(self, original=False):
+    def ensure_connection(self, original=True):
         def preserve_refresh_token(existing_conns, payload):
-            if not existing_conns:
-                return payload
-            conn_with_creds = connections.fetch_existing_connection_with_creds(existing_conns[0]['id'])
-            # Even though is a credential, this API posts the entire payload using properties
-            payload['properties']['refresh_token'] = conn_with_creds['credentials']['refresh_token']
             return payload
 
         conn_id = connections.ensure_connection(self, payload_hook=preserve_refresh_token, original_properties = original)
