@@ -153,7 +153,7 @@ class DeputyBase(BaseCase):
             for stream in ALL_STREAM_NAMES
         }
 
-    def ensure_connection(self, original=True):
+    def ensure_connection(self, original=False):
         def preserve_refresh_token(existing_conns, payload):
             if not existing_conns:
                 return payload
