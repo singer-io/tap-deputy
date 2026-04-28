@@ -22,3 +22,6 @@ class DeputyAllFieldsTest(AllFieldsTest, DeputyBase):
 
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
+
+    def get_connection_id(self):
+        return self.ensure_connection(self)
