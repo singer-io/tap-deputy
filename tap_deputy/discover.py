@@ -88,24 +88,14 @@ def get_schema(client, resource_name):
     for field_name, field_type in data['fields'].items():
         if field_name in ('Id', 'Modified'):
             continue  # already seeded above
-        # Skipping all fields of type Json until we decide on how to handle "[]" as null response
-        # Json data fields
-        if field_type == "Json":
-            continue
-        if field_type in ['Date', 'DateTime']:
-            json_schema = {
-                'type': ['null', 'string'],
-                'format': 'date-time'
-            }
+        if field_type in ('Date', 'DateTime'):
+            json_schema = {'type': ['null', 'string'], 'format': 'date-time'}
+        elif field_type in TYPE_MAP:
+            json_schema = {'type': ['null', TYPE_MAP[field_type]]}
         else:
-            if field_type not in TYPE_MAP:
-                LOGGER.warning(
-                    'Skipping field %s on resource %s: unknown type %s',
-                    field_name, resource_name, field_type)
-                continue
-            json_schema = {
-                'type': ['null', TYPE_MAP[field_type]]
-            }
+            LOGGER.warning('Skipping field %s on resource %s: unknown type %s',
+                           field_name, resource_name, field_type)
+            continue
 
         properties[field_name] = json_schema
 
@@ -128,7 +118,8 @@ def get_schema(client, resource_name):
     metadata.write(mdata, ('properties', 'Modified'), 'inclusion', 'automatic')
     mdata = metadata.to_list(mdata)
     # singer returns breadcrumbs as tuples; normalise to lists for consistency.
-    mdata = [{'breadcrumb': list(m['breadcrumb']), 'metadata': m['metadata']} for m in mdata]
+    mdata = [{'breadcrumb': list(m['breadcrumb']),
+              'metadata': m['metadata']} for m in mdata]
 
     return schema, mdata
 
