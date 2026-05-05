@@ -23,6 +23,9 @@ class DeputySyncCanaryTest(SyncCanaryTest, DeputyBase):
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
 
+    def get_connection_id(self):
+        return self.ensure_connection(self)
+
     def setUp(self):  # pylint: disable=invalid-name
         # Use a recent window to keep the canary fast; adjust if the test
         # account does not have data within this range.

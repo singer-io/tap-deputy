@@ -30,6 +30,9 @@ class DeputyBookmarkTest(BookmarkTest, DeputyBase):
     def name():
         return "tap_tester_deputy_combined_test"
 
+    def get_connection_id(self):
+        return self.ensure_connection(self)
+
     # -------------------------------------------------------------------
     # Bookmark wire format used by tap-deputy (plain ISO-8601 string)
     # -------------------------------------------------------------------

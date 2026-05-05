@@ -25,6 +25,9 @@ class DeputyStartDateTest(StartDateTest, DeputyBase):
     def streams_to_test(self):
         return {"system_usage_tracking", "system_usage_balances"}
 
+    def get_connection_id(self):
+        return self.ensure_connection(self)
+
     @property
     def start_date_1(self):
         return '2022-01-01T00:00:00Z'
