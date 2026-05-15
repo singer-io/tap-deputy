@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+  * Upgraded Python version [#11](https://github.com/singer-io/tap-deputy/pull/11)
+  * Inceased unittests coverage
+  * Added integration tests
+
 ## 1.1.3
   * Bump requests from 2.32.4, backoff from 1.8.0 to 1.10.0 [#11](https://github.com/singer-io/tap-deputy/pull/11)
 
